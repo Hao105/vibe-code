@@ -30,11 +30,42 @@ export default function App() {
   const ws = React.useRef<WebSocket | null>(null);
 
   const STICKERS = [
-    { id: 'cat', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f63a/512.webp' },
-    { id: 'heart', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f970/512.webp' },
+    { id: 'grinning', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f600/512.webp' },
+    { id: 'joy', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f602/512.webp' },
+    { id: 'rofl', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f923/512.webp' },
+    { id: 'smile_hearts', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f970/512.webp' },
+    { id: 'heart_eyes', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f60d/512.webp' },
+    { id: 'star_struck', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f929/512.webp' },
+    { id: 'kiss', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f618/512.webp' },
+    { id: 'zany', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f92a/512.webp' },
     { id: 'cool', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f60e/512.webp' },
+    { id: 'party', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f973/512.webp' },
+    { id: 'smirk', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f60f/512.webp' },
+    { id: 'unamused', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f612/512.webp' },
+    { id: 'roll_eyes', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f644/512.webp' },
+    { id: 'pleading', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f97a/512.webp' },
     { id: 'cry', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f62d/512.webp' },
-    { id: 'party', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f973/512.webp' }
+    { id: 'rage', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f621/512.webp' },
+    { id: 'exploding', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f92f/512.webp' },
+    { id: 'swear', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f92c/512.webp' },
+    { id: 'poop', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f4a9/512.webp' },
+    { id: 'clown', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f921/512.webp' },
+    { id: 'ghost', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f47b/512.webp' },
+    { id: 'alien', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f47d/512.webp' },
+    { id: 'robot', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f916/512.webp' },
+    { id: 'cat', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f63a/512.webp' },
+    { id: 'dog', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f436/512.webp' },
+    { id: 'monkey', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f412/512.webp' },
+    { id: 'unicorn', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f984/512.webp' },
+    { id: 'fire', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f525/512.webp' },
+    { id: '100', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f4af/512.webp' },
+    { id: 'sparkles', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/2728/512.webp' },
+    { id: 'star', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f31f/512.webp' },
+    { id: 'heart', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/2764/512.webp' },
+    { id: 'broken_heart', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f494/512.webp' },
+    { id: 'thumbs_up', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f44d/512.webp' },
+    { id: 'peace', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/270c/512.webp' },
+    { id: 'ok', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f44c/512.webp' }
   ];
 
   useEffect(() => {
@@ -186,19 +217,7 @@ export default function App() {
     return text;
   };
 
-  // 模擬接收外部訊息 (用於測試 Notification API)
-  const simulateIncomingMessage = () => {
-    const fakeMessage: ChatMessage = {
-      id: Date.now().toString(),
-      sender: STRINGS.DEFAULT_SENDER,
-      text: '這是一則模擬的外部新訊息 👋',
-      timestamp: new Date().toISOString()
-    };
-    setMessages(prev => [...prev, fakeMessage]);
-    
-    // 觸發通知
-    notify(`${fakeMessage.sender}: ${fakeMessage.text}`);
-  };
+
 
   const handleInstallClick = () => {
     if (installPrompt) {
@@ -276,7 +295,7 @@ export default function App() {
     <div className="flex h-screen w-full items-center justify-center p-2 md:p-6 gap-6">
       
       {/* Online Users Side Panel (Left) */}
-      <div className="hidden md:flex card w-72 h-[88vh] glass-panel shadow-2xl flex-col overflow-hidden animate-scale-up">
+      <div className="hidden md:flex card w-72 h-[88vh] glass-panel shadow-2xl flex-col overflow-hidden animate-scale-up rounded-[2.5rem]">
         <div className="glass-header text-primary p-4 font-bold text-lg text-center flex items-center justify-center gap-2">
           <div className="w-2 h-2 bg-success rounded-full animate-pulse"></div>
           目前在線 ({onlineUsers.length})
@@ -326,7 +345,7 @@ export default function App() {
       </div>
 
       {/* Main Chat Window */}
-      <div className="card w-full max-w-3xl h-[88vh] glass-panel shadow-2xl flex flex-col overflow-hidden animate-scale-up">
+      <div className="card w-full max-w-3xl h-[88vh] glass-panel shadow-2xl flex flex-col overflow-hidden animate-scale-up rounded-[2.5rem] border border-white/40">
         {/* Header */}
         <div className="glass-header p-5 shadow-sm z-10 flex flex-col gap-2">
           <div className="flex justify-between items-center">
@@ -336,12 +355,7 @@ export default function App() {
               </h1>
               <span className="text-[10px] font-bold opacity-40 tracking-widest uppercase">Secure End-to-End</span>
             </div>
-            <button 
-              onClick={simulateIncomingMessage}
-              className="btn btn-sm btn-ghost hover:bg-base-300 border border-base-300 rounded-xl"
-            >
-              🚀 {STRINGS.SIMULATE_REPLY}
-            </button>
+
             <button 
               onClick={() => setSoundEnabled(!soundEnabled)}
               className={`btn btn-sm btn-circle btn-ghost ${soundEnabled ? 'text-primary' : 'text-gray-400'}`}
@@ -401,17 +415,19 @@ export default function App() {
           
           {/* Sticker Picker Popup */}
           {showStickers && (
-            <div className="absolute bottom-full left-5 mb-4 glass-panel bg-white/90 shadow-2xl rounded-3xl p-5 border border-white/50 flex gap-5 animate-scale-up z-[60]">
-              {STICKERS.map(sticker => (
-                <button
-                  key={sticker.id}
-                  type="button"
-                  onClick={() => handleSend(undefined, `[STICKER:${sticker.url}]`)}
-                  className="hover:scale-125 transition-all duration-300 focus:outline-none"
-                >
-                  <img src={sticker.url} alt={sticker.id} className="w-14 h-14 drop-shadow-xl" />
-                </button>
-              ))}
+            <div className="absolute bottom-full left-5 mb-4 glass-panel bg-white/95 shadow-2xl rounded-[2rem] p-5 border border-white/60 w-[350px] max-h-80 overflow-y-auto animate-scale-up z-[60]">
+              <div className="grid grid-cols-5 gap-4">
+                {STICKERS.map(sticker => (
+                  <button
+                    key={sticker.id}
+                    type="button"
+                    onClick={() => handleSend(undefined, `[STICKER:${sticker.url}]`)}
+                    className="hover:scale-125 hover:-translate-y-1 hover:shadow-xl hover:bg-white/40 rounded-2xl p-2 transition-all duration-300 focus:outline-none flex items-center justify-center bg-transparent"
+                  >
+                    <img loading="lazy" src={sticker.url} alt={sticker.id} className="w-12 h-12 drop-shadow-md" />
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
@@ -446,7 +462,7 @@ export default function App() {
 
       {/* Trace Log Side Panel */}
       {isAdmin && (
-        <div className="hidden lg:flex card w-80 h-[88vh] glass-panel shadow-2xl flex-col overflow-hidden animate-scale-up">
+        <div className="hidden lg:flex card w-80 h-[88vh] glass-panel shadow-2xl flex-col overflow-hidden animate-scale-up rounded-[2.5rem]">
           <div className="glass-header text-neutral p-4 font-bold text-lg text-center">
             🛡️ 監控軌跡 (Monitor)
           </div>
