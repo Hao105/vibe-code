@@ -48,9 +48,11 @@ export default function App() {
 
     if (isAccessDenied) return;
 
-    // 建立 WebSocket 連線 (透過 Vite Proxy)
+    // 建立 WebSocket 連線
+    // 若在本地開發(有 Vite Proxy)，則用當前 origin。若是正式部署(GitHub Pages)，則指向您的 Go 後端真實位址。
+    const backendHost = import.meta.env.PROD ? '127.0.0.1:8080' : window.location.host;
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}${window.location.pathname.replace(/\/$/, '')}/api/ws`;
+    const wsUrl = `${protocol}//${backendHost}${import.meta.env.PROD ? '' : window.location.pathname.replace(/\/$/, '')}/api/ws`;
     const socket = new WebSocket(wsUrl);
 
     socket.onopen = () => {
