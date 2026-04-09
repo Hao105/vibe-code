@@ -40,7 +40,7 @@ export const useFaviconBlink = () => {
     let toggle = false;
     const link = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
 
-    blinkInterval.current = setInterval(() => {
+    blinkInterval.current = window.setInterval(() => {
       // 交替切換紅點跟原圖
       if (link) {
         link.href = toggle 
@@ -54,7 +54,7 @@ export const useFaviconBlink = () => {
   const stopBlink = () => {
     isBlinking.current = false;
     if (blinkInterval.current) {
-      clearInterval(blinkInterval.current);
+      window.clearInterval(blinkInterval.current);
       blinkInterval.current = null;
     }
     const link = document.querySelector("link[rel~='icon']") as HTMLLinkElement;

@@ -6,7 +6,7 @@ export interface ChatMessage {
 }
 
 // 使用相對路徑，讓 Vite Proxy 代理轉發到後端，藉此忽略自簽名憑證不信任問題
-const BASE_URL = `/api`;
+const BASE_URL = `api`;
 
 /**
  * 取得歷史訊息

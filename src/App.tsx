@@ -50,7 +50,7 @@ export default function App() {
 
     // 建立 WebSocket 連線 (透過 Vite Proxy)
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/api/ws`;
+    const wsUrl = `${protocol}//${window.location.host}${window.location.pathname.replace(/\/$/, '')}/api/ws`;
     const socket = new WebSocket(wsUrl);
 
     socket.onopen = () => {
