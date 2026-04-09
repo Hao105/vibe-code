@@ -1,73 +1,84 @@
-# Antigravity React Chat Room
+# 🪐 Antigravity React Chat Room
 
-這是依據 Antigravity 專案開發規範建置的高級感全端聊天室。
-採用 **React (Vite)** + **Go (Gin/Gorilla)** 的現代化架構，具備 **PWA 安裝**、**即時通訊**、**IP 安全白名單**與**極致視覺美學**。
-
----
-
-## ✨ 核心特色
-
-1. **極致視覺體驗 (Glassmorphism)**: 採用半透明磨砂玻璃設計，搭配背景動態流體漸層，提供 premium 等級的視覺享受。
-2. **即時雙向通訊 (WebSocket)**: 秒發秒至，支援表情貼圖解析與即時在線名單追蹤。
-3. **PWA 安裝支援**: 支援將網頁直接「安裝」到桌面或手機，擁有獨立圖示、系統工作列提醒與自帶叮咚提示音。
-4. **多維度提醒機制**: 結合「系統推播通知」、「網頁標籤紅點閃爍」與「任務列 Badge 標記」。
-5. **安全存取控制**: 內建動態 IP 白名單熱更新機制，未授權用戶將自動導向存取拒絕頁面。
-6. **管理員監控 (Trace Log)**: 專屬管理員權限可實時監控所有用戶的發送軌跡與連線來源。
+這是依據 Antigravity 專案開發規範建置的高級感全端聊天室。採用 **React (Vite)** 靜態前端與 **Go (Gorilla WebSocket)** 後端的解耦架構，實現了即使在 GitHub Pages 也能對接私人伺服器的動態通訊方案。
 
 ---
 
-## 🛠️ 自動化部署 (GitHub Actions)
+## 🏗️ 系統架構圖 (System Architecture)
 
-本專案已配置 **CI/CD 自動化部署流程** (`.github/workflows/deploy.yml`)。
+```mermaid
+graph TD
+    subgraph "External User (Mobile/PC)"
+        U[Browser / PWA App]
+    end
 
-### 部署流程：
-1. **Push 更新**：只要將程式碼推送到 GitHub 的 `main` 分支。
-2. **自動 Build**：GitHub Actions 會自動啟動虛擬環境進行 `npm run build`。
-3. **佈署 Pages**：編譯後的靜態檔案會被自動推送到同步的 `gh-pages` 分支。
-4. **上線**：您的前端聊天室將在 `https://您的帳號.github.io/專案名` 即時更新。
+    subgraph "Cloud Infrastructure"
+        GP["GitHub Pages (Static Assets)"]
+        N[Ngrok Tunnel (Secure Gateway)]
+    end
 
-> **注意：** GitHub Pages 僅提供靜態網頁託管。您的 **Go Server** 仍需運行於具備公網 IP 的環境（或本機電腦），並確保前端 API 網址指向正確。
+    subgraph "Local Secure Server"
+        GS[Go Backend Server]
+        W[whitelist.json (Dynamic Auth)]
+    end
 
----
-
-## 🚀 快速啟動指南
-
-### 1. 啟動後端 (Go Server)
-```powershell
-cd server
-go build -o app.exe main.go
-.\app.exe
+    U -- 1. 載入編譯後的靜態檔案 --> GP
+    U -- 2. 通過隧道傳送 API/WS 請求 --> N
+    N -- 3. 轉發請求至本地伺服器 --> GS
+    GS -- 4. 比對 IP 白名單 --> W
+    GS -- 5. 推送即時訊息/軌跡 --> U
 ```
-*後端預設執行於 https://localhost:8080，支援 HTTPS 自簽憑證。*
-
-### 2. 啟動前端 (React Vite)
-```powershell
-npm install
-npm run dev
-```
-*前端將執行於 https://localhost:5173。*
 
 ---
 
-## 📱 安裝為桌面 App (PWA)
+## 🚀 核心章節與使用方法
 
-為了獲得最佳體驗（不漏掉訊息），強烈建議將網頁安裝為 App：
-1. 使用 **Microsoft Edge** 或 **Chrome** 開啟聊天室。
-2. 點擊網址列右側的 **[+]** (安裝應用程式) 圖示。
-3. 安裝後從桌面啟動，並將其**釘選到工作列**。
-4. **叮咚提示音**：在 App 右上角開啟小喇叭圖示，即可在背景接收聲音提醒。
+### 1. 極致視覺與 PWA 體感  
+*   **使用方法**：使用支援 PWA 的瀏覽器（如 Chrome/Edge）開啟網站，點擊網址列右側的「安裝」按鈕。  
+*   **用途**：將網頁轉化為獨立 Window 運行的桌面 App。支援「背後執行」與「系統級通知音效」，確保您在處理其他事務時不會錯過任何加密通訊。
+
+### 2. 動態連線大門 (`?server=`)  
+*   **使用方法**：分享網址時附帶參數，例如 `https://hao105.github.io/vibe-code/?server=您的Ngrok網址`。  
+*   **用途**：**解決靜態網站無法對接動態 IP 的痛點**。這讓您的朋友不需要任何設定，點開連結就能自動指向您的私人伺服器。
+
+### 3. 安全白名單熱更新  
+*   **使用方法**：直接編輯 `server/whitelist.json` 加入新成員的 IP（伺服器終端機會主動提示拒絕連線的 IP）。  
+*   **用途**：提供**零停機時間**的成員管理。當管理員 (Admin) 登入時，還能開啟隱藏的「實時軌跡監控」面板。
 
 ---
 
-## 🛡️ 管理員權限 (Whitelist 設定)
-管理員與使用者名單定義於 `server/whitelist.json`。
-* 若 IP 顯示為 `Admin`，將自動開啟右側的 **監控軌跡 (Monitor)** 面板。
-* 支援**熱更新**：直接修改 `whitelist.json`，後端會自動在 3 秒內載入新設定，無需重啟。
+## 🛠️ 建置與部署流程 (Build & Deployment)
+
+### 第一階段：自動化前端部署
+本專案已整合 GitHub Actions。您只需要完成以下一次性設定：
+1. **GitHub 設定**：前往 Repo 的 `Settings -> Pages -> Build and deployment`，將 Source 的 `Branch` 設為 **`gh-pages`**。
+2. **自動觸發**：以後只要 `git push` 到 `main` 分支，GitHub 就會自動執行編譯並更新您的網站。
+
+### 第二階段：後端伺服器啟動
+1. 進入 `server` 資料夾，執行：
+   ```powershell
+   go run main.go
+   ```
+2. 啟動 Ngrok 隧道以獲取公網 HTTPS 網址：
+   ```powershell
+   ngrok http https://localhost:8080
+   ```
+
+### 第三階段：通行證激活 (Ngrok 限制繞過)
+**這一步對於外部用戶至關重要：**
+1. 由於 Ngrok 免費版會攔截 WebSocket 請求，請先用瀏覽器**手動訪問一次**您的 Ngrok Forwarding 網址。
+2. 點擊畫面上的藍色按鈕 **"Visit Site"**。
+3. 關閉該頁面，回到聊天網頁。現在所有的加密連線都將被放行。
 
 ---
 
-## 📦 系統目錄架構
-- `/src`: React 前端原始碼 (包含 Hooks, API, Components)。
-- `/public`: 靜態資源、PWA Manifest 與 Service Worker。
-- `/server`: Go 語言實現的即時後端。
-- `.github/workflows`: 自動化部署流程定義。
+## 📦 目錄架構
+- `/src`: 前端 UI 核心與動態 API 邏輯。
+- `/server`: Go 伺服器原始碼、SSL 憑證與動態名單。
+- `/public`: 機器人圖示、Service Worker 與 Manifest。
+- `.github`: CI/CD 行動定義碼。
+
+---
+
+## 🛡️ 維護指南
+如果您看到 `⚠️ 拒絕連線(WS)` 時，請複製終端機顯示的 IP 並加至 `whitelist.json`。系統會在 3 秒內自動偵測並放行。
