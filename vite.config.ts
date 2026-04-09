@@ -12,10 +12,13 @@ export default defineConfig({
   plugins: [react()],
   server: {
     host: true,
-    https: {
-      key: fs.readFileSync(path.resolve(__dirname, 'server/key.pem')),
-      cert: fs.readFileSync(path.resolve(__dirname, 'server/cert.pem')),
-    },
+    https: fs.existsSync(path.resolve(__dirname, 'server/key.pem')) && 
+           fs.existsSync(path.resolve(__dirname, 'server/cert.pem')) 
+      ? {
+          key: fs.readFileSync(path.resolve(__dirname, 'server/key.pem')),
+          cert: fs.readFileSync(path.resolve(__dirname, 'server/cert.pem')),
+        }
+      : false,
     proxy: {
       '/api': {
         target: 'https://127.0.0.1:8080',
