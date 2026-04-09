@@ -3,12 +3,12 @@
   "name": "Antigravity Secure Chat Room",
   "icons": [
     {
-      "src": "https://api.dicebear.com/7.x/shapes/svg?seed=chat",
+      "src": "favicon.png",
       "sizes": "192x192",
       "type": "image/png"
     },
     {
-      "src": "https://api.dicebear.com/7.x/shapes/svg?seed=chat",
+      "src": "favicon.png",
       "sizes": "512x512",
       "type": "image/png"
     }

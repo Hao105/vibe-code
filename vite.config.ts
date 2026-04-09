@@ -8,6 +8,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  base: '/vibe-code/',
   plugins: [react()],
   server: {
     host: true,
