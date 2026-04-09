@@ -23,7 +23,9 @@ export const getServerUrl = () => {
  */
 export const fetchMessages = async (): Promise<ChatMessage[]> => {
   try {
-    const res = await fetch(`${getServerUrl()}/messages`);
+    const res = await fetch(`${getServerUrl()}/messages`, {
+      headers: { 'ngrok-skip-browser-warning': 'true' }
+    });
     
     // IP 白名單攔截檢查
     if (res.status === 403) {
@@ -43,7 +45,9 @@ export const fetchMessages = async (): Promise<ChatMessage[]> => {
  */
 export const fetchTraces = async (): Promise<any[] | null> => {
   try {
-    const res = await fetch(`${getServerUrl()}/traces`);
+    const res = await fetch(`${getServerUrl()}/traces`, {
+      headers: { 'ngrok-skip-browser-warning': 'true' }
+    });
     if (res.status === 403) return null; // 403 表示權限不足(非管理員)，回傳 null
     if (!res.ok) throw new Error('API Error');
     return res.json();
@@ -55,7 +59,9 @@ export const fetchTraces = async (): Promise<any[] | null> => {
 
 export const fetchMe = async (): Promise<string | null> => {
   try {
-    const res = await fetch(`${getServerUrl()}/me`);
+    const res = await fetch(`${getServerUrl()}/me`, {
+      headers: { 'ngrok-skip-browser-warning': 'true' }
+    });
     if (!res.ok) return null;
     const data = await res.json();
     return data.username;
@@ -68,7 +74,10 @@ export const sendMessage = async (text: string): Promise<ChatMessage> => {
   try {
     const res = await fetch(`${getServerUrl()}/messages`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true'
+      },
       body: JSON.stringify({ text }) // 不再傳送 sender，由後端決定
     });
 
