@@ -19,6 +19,10 @@ export default function App() {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [installPrompt, setInstallPrompt] = useState<any>(null);
   
+  // 新增：動態網址配置狀態
+  const [isConfigured, setIsConfigured] = useState(!import.meta.env.PROD || !!localStorage.getItem('chat_server_url'));
+  const [serverInput, setServerInput] = useState('');
+  
   const { notify } = useNotification();
   const { startBlink } = useFaviconBlink();
   const { playNotificationSound } = useSound();
@@ -41,18 +45,45 @@ export default function App() {
     };
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
 
+    // 解析網址列是否有 ?server= 參數
+    const params = new URLSearchParams(window.location.search);
+    const serverParam = params.get('server');
+    if (serverParam) {
+      // 若沒有 http 開頭幫他加上 (Ngrok 預設 https)
+      const validUrl = serverParam.startsWith('http') ? serverParam : `https://${serverParam}`;
+      localStorage.setItem('chat_server_url', validUrl);
+      window.history.replaceState({}, document.title, window.location.pathname);
+      setIsConfigured(true);
+    }
+
     // 取得自己的用戶名稱
     fetchMe().then(name => {
       if (name) setCurrentUser(name);
     });
 
-    if (isAccessDenied) return;
+    if (!isConfigured || isAccessDenied) return;
 
     // 建立 WebSocket 連線
-    // 若在本地開發(有 Vite Proxy)，則用當前 origin。若是正式部署(GitHub Pages)，則指向您的 Go 後端真實位址。
-    const backendHost = import.meta.env.PROD ? '127.0.0.1:8080' : window.location.host;
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${backendHost}${import.meta.env.PROD ? '' : window.location.pathname.replace(/\/$/, '')}/api/ws`;
+    let wsUrl = '';
+    if (!import.meta.env.PROD) {
+      // 本地開發：直接使用相對路徑，善用 Vite Proxy
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      wsUrl = `${protocol}//${window.location.host}${window.location.pathname.replace(/\/$/, '')}/api/ws`;
+    } else {
+      // 正式環境 (GitHub Pages)：解析使用者填寫的伺服器網址
+      const savedUrl = localStorage.getItem('chat_server_url');
+      if (!savedUrl) return;
+      try {
+        const parsedUrl = new URL(savedUrl);
+        const protocol = parsedUrl.protocol === 'https:' ? 'wss:' : 'ws:';
+        wsUrl = `${protocol}//${parsedUrl.host}${parsedUrl.pathname.replace(/\/$/, '')}/api/ws`;
+      } catch (e) {
+        console.error("Invalid server URL", savedUrl);
+        setIsConfigured(false);
+        return;
+      }
+    }
+
     const socket = new WebSocket(wsUrl);
 
     socket.onopen = () => {
@@ -125,7 +156,7 @@ export default function App() {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       socket.close();
     };
-  }, [isAccessDenied, currentUser, notify]);
+  }, [isConfigured, isAccessDenied, currentUser, notify]);
 
   const handleSend = async (e?: React.FormEvent, overridingText?: string) => {
     e?.preventDefault();
@@ -179,6 +210,53 @@ export default function App() {
       });
     }
   };
+
+  const handleSaveConfig = (e: React.FormEvent) => {
+    e.preventDefault();
+    let url = serverInput.trim();
+    if (!url.startsWith('http')) {
+      url = 'https://' + url;
+    }
+    try {
+      new URL(url); // 測試是否為合法網址
+      localStorage.setItem('chat_server_url', url);
+      setIsConfigured(true);
+    } catch {
+      alert("請輸入有效的網址 (例如 https://xxxxx.ngrok.app)");
+    }
+  };
+
+  if (!isConfigured) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-base-300 p-4">
+        <div className="card w-full max-w-md glass-panel shadow-2xl animate-scale-up border border-white/20">
+          <div className="card-body items-center text-center p-8">
+            <div className="w-16 h-16 bg-gradient-to-br from-primary to-secondary rounded-2xl flex items-center justify-center mb-4 shadow-lg border border-white/30 rotate-3 cursor-pointer hover:rotate-6 transition-transform">
+               <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+               </svg>
+            </div>
+            <h2 className="card-title text-2xl mb-2 font-black tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary">連線大門</h2>
+            <p className="text-sm opacity-80 mb-6 leading-relaxed">請輸入您的伺服器位址<br/>(例如 Ngrok 網址)，以建立安全加密連線。</p>
+            
+            <form onSubmit={handleSaveConfig} className="w-full flex flex-col gap-4">
+               <input 
+                 type="text" 
+                 required 
+                 value={serverInput}
+                 onChange={e => setServerInput(e.target.value)}
+                 className="input w-full bg-white/60 border-none focus:bg-white focus:ring-2 focus:ring-primary/50 shadow-inner rounded-xl font-mono text-center tracking-wider text-primary"
+                 placeholder="https://xxxxx.ngrok.app"
+               />
+               <button type="submit" className="btn btn-primary w-full rounded-xl shadow-lg border-none hover:scale-[1.02] active:scale-[0.98] transition-transform font-bold tracking-widest mt-2 h-12">
+                 啟動連線 🚀
+               </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (isAccessDenied) {
     return (

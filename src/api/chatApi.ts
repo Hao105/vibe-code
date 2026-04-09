@@ -5,16 +5,25 @@ export interface ChatMessage {
   timestamp: string;
 }
 
-// 判斷是否為生產環境 (例如 GitHub Pages)，若是則指向您的 Go 後端真實位址
-// TODO(2024-05-01): 系統管理員 - 若要讓外部網路連線，請將 127.0.0.1 修改為您的公網 IP 或 Ngrok 網址
-const BASE_URL = import.meta.env.PROD ? 'https://127.0.0.1:8080/api' : 'api';
+// 從 localStorage 動態取得伺服器網址
+export const getServerUrl = () => {
+  // 開發環境仍維持相對路徑，善用 Vite Proxy
+  if (!import.meta.env.PROD) return 'api';
+  
+  const savedUrl = localStorage.getItem('chat_server_url');
+  if (savedUrl) {
+    // 確保結尾沒有斜線
+    return `${savedUrl.replace(/\/$/, '')}/api`;
+  }
+  return ''; // 若無設定，回傳空字串 (會導致後續請求失敗，交由 UI 阻斷)
+};
 
 /**
  * 取得歷史訊息
  */
 export const fetchMessages = async (): Promise<ChatMessage[]> => {
   try {
-    const res = await fetch(`${BASE_URL}/messages`);
+    const res = await fetch(`${getServerUrl()}/messages`);
     
     // IP 白名單攔截檢查
     if (res.status === 403) {
@@ -34,7 +43,7 @@ export const fetchMessages = async (): Promise<ChatMessage[]> => {
  */
 export const fetchTraces = async (): Promise<any[] | null> => {
   try {
-    const res = await fetch(`${BASE_URL}/traces`);
+    const res = await fetch(`${getServerUrl()}/traces`);
     if (res.status === 403) return null; // 403 表示權限不足(非管理員)，回傳 null
     if (!res.ok) throw new Error('API Error');
     return res.json();
@@ -46,7 +55,7 @@ export const fetchTraces = async (): Promise<any[] | null> => {
 
 export const fetchMe = async (): Promise<string | null> => {
   try {
-    const res = await fetch(`${BASE_URL}/me`);
+    const res = await fetch(`${getServerUrl()}/me`);
     if (!res.ok) return null;
     const data = await res.json();
     return data.username;
@@ -57,7 +66,7 @@ export const fetchMe = async (): Promise<string | null> => {
 
 export const sendMessage = async (text: string): Promise<ChatMessage> => {
   try {
-    const res = await fetch(`${BASE_URL}/messages`, {
+    const res = await fetch(`${getServerUrl()}/messages`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text }) // 不再傳送 sender，由後端決定
