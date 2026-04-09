@@ -9,17 +9,17 @@
 ```mermaid
 graph TD
     subgraph "External User (Mobile/PC)"
-        U[Browser / PWA App]
+        U["Browser / PWA App"]
     end
 
     subgraph "Cloud Infrastructure"
         GP["GitHub Pages (Static Assets)"]
-        N[Ngrok Tunnel (Secure Gateway)]
+        N["Ngrok Tunnel (Secure Gateway)"]
     end
 
     subgraph "Local Secure Server"
-        GS[Go Backend Server]
-        W[whitelist.json (Dynamic Auth)]
+        GS["Go Backend Server"]
+        W["whitelist.json (Dynamic Auth)"]
     end
 
     U -- 1. 載入編譯後的靜態檔案 --> GP
