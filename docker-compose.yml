@@ -1,0 +1,26 @@
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "443:443"
+      - "80:80"
+    volumes:
+      - ./server/cert.pem:/etc/nginx/ssl/cert.pem:ro
+      - ./server/key.pem:/etc/nginx/ssl/key.pem:ro
+    depends_on:
+      - backend
+    restart: always
+
+  backend:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    volumes:
+      - ./server/whitelist.json:/app/whitelist.json
+      - ./server/cert.pem:/app/cert.pem:ro
+      - ./server/key.pem:/app/key.pem:ro
+    ports:
+      - "8080:8080" # Exposed optionally for direct API testing
+    restart: always
