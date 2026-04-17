@@ -5,18 +5,7 @@ export interface ChatMessage {
   timestamp: string;
 }
 
-// 從 localStorage 動態取得伺服器網址
-export const getServerUrl = () => {
-  // 開發環境仍維持相對路徑，善用 Vite Proxy
-  if (!import.meta.env.PROD) return 'api';
-  
-  const savedUrl = localStorage.getItem('chat_server_url');
-  if (savedUrl) {
-    // 確保結尾沒有斜線
-    return `${savedUrl.replace(/\/$/, '')}/api`;
-  }
-  return ''; // 若無設定，回傳空字串 (會導致後續請求失敗，交由 UI 阻斷)
-};
+export const getServerUrl = () => '/api';
 
 /**
  * 取得歷史訊息
@@ -89,6 +78,31 @@ export const sendMessage = async (text: string): Promise<ChatMessage> => {
     return res.json();
   } catch (error) {
     console.error('Failed to send message:', error);
+    throw error;
+  }
+};
+
+export const uploadFile = async (file: File): Promise<{url: string, filename: string, isImage: boolean}> => {
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const res = await fetch(`${getServerUrl()}/upload`, {
+      method: 'POST',
+      body: formData,
+      headers: {
+        'ngrok-skip-browser-warning': 'true'
+      }
+    });
+
+    if (res.status === 403) {
+      throw new Error('ACCESS_DENIED');
+    }
+    if (!res.ok) throw new Error('API Error');
+    
+    return res.json();
+  } catch (error) {
+    console.error('Failed to upload file:', error);
     throw error;
   }
 };

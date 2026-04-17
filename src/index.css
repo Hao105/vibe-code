@@ -20,6 +20,26 @@ body {
   100% { background-position: 0% 50%; }
 }
 
+@keyframes float {
+  0% {
+    transform: translateY(0) rotate(0deg) scale(1);
+  }
+  33% {
+    transform: translateY(-80px) rotate(120deg) scale(1.1);
+  }
+  66% {
+    transform: translateY(40px) rotate(240deg) scale(0.9);
+  }
+  100% {
+    transform: translateY(0) rotate(360deg) scale(1);
+  }
+}
+
+.floating-shape {
+  animation: float 25s infinite ease-in-out;
+  transform-origin: center center;
+}
+
 @keyframes scale-up {
   from { transform: scale(0.95); opacity: 0; }
   to { transform: scale(1); opacity: 1; }

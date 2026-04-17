@@ -1,13 +1,30 @@
-// 基礎的 Service Worker，用於滿足 PWA 的安裝條件
+const CACHE_NAME = 'antigravity-v5';
+const ASSETS = [
+  './',
+  './index.html',
+  './manifest.json',
+  './favicon.png'
+];
+
 self.addEventListener('install', (event) => {
-  console.log('SW installed');
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
+  );
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
-  console.log('SW activated');
+  event.waitUntil(
+    caches.keys().then((keys) => Promise.all(
+      keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key))
+    ))
+  );
 });
 
 self.addEventListener('fetch', (event) => {
-  // 保持空實現即可滿足安裝要求
+  event.respondWith(
+    caches.match(event.request).then((response) => {
+      return response || fetch(event.request);
+    })
+  );
 });

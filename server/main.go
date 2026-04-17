@@ -1,18 +1,32 @@
 package main
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"mime"
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
 )
+
+func init() {
+	// 避免在脫機 Windows 環境下，因缺乏註冊表關聯而導致 CSS/JS 檔案的 Content-Type 不能正確解析 (引起 ERR_BLOCKED_BY_ORB 問題)
+	mime.AddExtensionType(".css", "text/css")
+	mime.AddExtensionType(".js", "application/javascript")
+	mime.AddExtensionType(".svg", "image/svg+xml")
+	mime.AddExtensionType(".html", "text/html")
+	mime.AddExtensionType(".webmanifest", "application/manifest+json")
+	mime.AddExtensionType(".json", "application/json")
+}
 
 type Message struct {
 	ID        string    `json:"id"`
@@ -34,6 +48,17 @@ type WSPacket struct {
 	Payload interface{} `json:"payload"`
 }
 
+type IncomingPacket struct {
+	Type   string `json:"type"` // empty or 'MESSAGE' / 'STATUS'
+	Text   string `json:"text"`
+	Status string `json:"status"`
+}
+
+type UserStatus struct {
+	Name   string `json:"name"`
+	Status string `json:"status"`
+}
+
 var (
 	whitelist     map[string]string
 	whitelistLock sync.RWMutex
@@ -45,6 +70,9 @@ var (
 
 	traces   []Trace
 	traceMu  sync.Mutex
+
+	userStatuses  = make(map[string]string)
+	statusMu      sync.RWMutex
 
 	clients   = make(map[*websocket.Conn]string)
 	clientsMu sync.Mutex
@@ -66,10 +94,15 @@ func broadcastOnlineUsers() {
 	}
 	clientsMu.Unlock()
 
-	var uniqUsers []string
+	var uniqUsers []UserStatus
+	statusMu.RLock()
 	for name := range users {
-		uniqUsers = append(uniqUsers, name)
+		uniqUsers = append(uniqUsers, UserStatus{
+			Name:   name,
+			Status: userStatuses[name],
+		})
 	}
+	statusMu.RUnlock()
 
 	broadcast <- WSPacket{
 		Type:    "ONLINE_USERS",
@@ -134,6 +167,77 @@ func loadWhitelist() error {
 	return nil
 }
 
+// 檔案上傳處理程序
+func uploadHandler(w http.ResponseWriter, r *http.Request) {
+	setupCORS(&w, r)
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	if r.Method != "POST" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// 白名單驗證
+	ip := getClientIP(r)
+	whitelistLock.RLock()
+	_, allowed := whitelist[ip]
+	whitelistLock.RUnlock()
+	if !allowed {
+		http.Error(w, "Access Denied", http.StatusForbidden)
+		return
+	}
+
+	// 限制上傳大小 50MB
+	r.Body = http.MaxBytesReader(w, r.Body, 50<<20)
+	if err := r.ParseMultipartForm(50 << 20); err != nil {
+		http.Error(w, "File too large or malformed", http.StatusBadRequest)
+		return
+	}
+
+	file, handler, err := r.FormFile("file")
+	if err != nil {
+		http.Error(w, "Error retrieving file", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	// 產生防撞擊新檔名
+	timestamp := time.Now().UnixNano() / int64(time.Millisecond)
+	cleanFileName := strings.ReplaceAll(handler.Filename, " ", "_")
+	newFileName := fmt.Sprintf("%d-%s", timestamp, cleanFileName)
+	filePath := filepath.Join("uploads", newFileName)
+
+	dst, err := os.Create(filePath)
+	if err != nil {
+		http.Error(w, "Failed to save file", http.StatusInternalServerError)
+		return
+	}
+	defer dst.Close()
+
+	if _, err := io.Copy(dst, file); err != nil {
+		http.Error(w, "Failed to save file", http.StatusInternalServerError)
+		return
+	}
+
+	// 判斷是否為圖片，協助前端預處理
+	isImage := false
+	ext := strings.ToLower(filepath.Ext(newFileName))
+	if ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".gif" || ext == ".webp" {
+		isImage = true
+	}
+
+	url := fmt.Sprintf("/uploads/%s", newFileName)
+	
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"url": url,
+		"filename": handler.Filename,
+		"isImage": isImage,
+	})
+}
+
 // 背景監聽白名單修改
 func watchWhitelist() {
 	var lastModTime time.Time
@@ -187,6 +291,11 @@ func main() {
 	}
 	log.Println("✅ Initial whitelist loaded.")
 
+	// 初始化上傳目錄
+	if err := os.MkdirAll("./uploads", 0755); err != nil {
+		log.Printf("Warning: Failed to create uploads directory: %v", err)
+	}
+
 	// 啟動背景熱更新與 WS 廣播
 	go watchWhitelist()
 	go handleMessages()
@@ -208,8 +317,33 @@ func main() {
 		json.NewEncoder(w).Encode(map[string]string{"username": userName})
 	})
 
+	// 上傳 API
+	http.HandleFunc("/api/upload", uploadHandler)
+
+	// 伺服前端靜態檔案 (取代 Nginx 功能)
+	fs := http.FileServer(http.Dir("./dist"))
+	http.Handle("/vibe-code/", http.StripPrefix("/vibe-code/", fs))
+	
+	// 伺服上傳的檔案
+	fileFs := http.FileServer(http.Dir("./uploads"))
+	http.Handle("/uploads/", http.StripPrefix("/uploads/", fileFs))
+
+	// 如果直接訪問根目錄，自動跳轉
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/" {
+			http.Redirect(w, r, "/vibe-code/", http.StatusFound)
+			return
+		}
+	})
+
 	fmt.Println("🚀 Antigravity Chat Server is running on https://localhost:8080")
-	log.Fatal(http.ListenAndServeTLS(":8080", "cert.pem", "key.pem", nil))
+	server := &http.Server{
+		Addr: ":8080",
+		TLSConfig: &tls.Config{
+			MinVersion: tls.VersionTLS12,
+		},
+	}
+	log.Fatal(server.ListenAndServeTLS("cert.pem", "key.pem"))
 }
 
 func wsHandler(w http.ResponseWriter, r *http.Request) {
@@ -254,8 +388,8 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 	addTrace("ENTER", userName, ip)
 
 	for {
-		var msg Message
-		err := ws.ReadJSON(&msg)
+		var incoming IncomingPacket
+		err := ws.ReadJSON(&incoming)
 		if err != nil {
 			log.Printf("Client disconnected (%s): %v", userName, err)
 			clientsMu.Lock()
@@ -266,9 +400,21 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 
-		msg.ID = fmt.Sprintf("%d", time.Now().UnixNano())
-		msg.Timestamp = time.Now()
-		msg.Sender = userName
+		if incoming.Type == "STATUS" {
+			statusMu.Lock()
+			userStatuses[userName] = incoming.Status
+			statusMu.Unlock()
+			go broadcastOnlineUsers()
+			continue
+		}
+
+		// 處理普通的訊息
+		msg := Message{
+			ID:        fmt.Sprintf("%d", time.Now().UnixNano()),
+			Timestamp: time.Now(),
+			Sender:    userName,
+			Text:      incoming.Text,
+		}
 
 		mu.Lock()
 		messages = append(messages, msg)

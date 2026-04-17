@@ -1,0 +1,32 @@
+# 第一階段：編譯前端 React 靜態檔案
+FROM node:20-alpine AS frontend-builder
+WORKDIR /app
+COPY package.json package-lock.json* ./
+RUN npm install
+COPY . .
+RUN npm run build
+
+# 第二階段：編譯後端 Windows 可執行檔
+FROM golang:1.21-alpine AS backend-builder
+WORKDIR /app
+COPY server/go.mod server/go.sum ./
+RUN go mod download
+COPY server/ .
+# 使用交叉編譯，強迫產出 Windows x64 架構的 server.exe
+RUN CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o server.exe main.go
+
+# 第三階段：打包快遞母艦
+FROM alpine:latest
+
+# 安裝基本的解壓與複製工具 (雖然 Alpine 內建)
+WORKDIR /payload
+
+# 收集所有需要的部署物資
+COPY --from=backend-builder /app/server.exe ./
+COPY --from=frontend-builder /app/dist ./dist
+COPY server/whitelist.json ./
+COPY server/cert.pem ./
+COPY server/key.pem ./
+
+# 當 Container 執行時，自動將所有檔案倒出到 /host 目錄 (必須由外部綁定)
+CMD ["sh", "-c", "echo '🚚 正在將檔案卸載至您的 Windows 主機...'; cp -r /payload/* /host/; echo '✅ 卸載完成！請關閉此視窗，並直接在主機上執行 server.exe'"]

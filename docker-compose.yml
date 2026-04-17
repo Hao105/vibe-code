@@ -1,8 +1,9 @@
 services:
   frontend:
+    image: vibe-code-frontend
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.frontend
     ports:
       - "443:443"
       - "80:80"
@@ -14,9 +15,10 @@ services:
     restart: always
 
   backend:
+    image: vibe-code-backend
     build:
-      context: ./server
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: server/Dockerfile.backend
     volumes:
       - ./server/whitelist.json:/app/whitelist.json
       - ./server/cert.pem:/app/cert.pem:ro

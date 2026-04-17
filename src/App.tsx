@@ -3,13 +3,15 @@ import { useNotification } from './hooks/useNotification';
 import { useChatScroll } from './hooks/useChatScroll';
 import { useFaviconBlink } from './hooks/useFaviconBlink';
 import { useSound } from './hooks/useSound';
-import { fetchTraces, fetchMe, ChatMessage } from './api/chatApi';
+import { fetchTraces, fetchMe, uploadFile, ChatMessage } from './api/chatApi';
 import { STRINGS } from './constants';
+import SnakeGame from './components/SnakeGame';
+import Screensaver from './components/Screensaver';
 
 export default function App() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [traces, setTraces] = useState<any[]>([]);
-  const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
+  const [onlineUsers, setOnlineUsers] = useState<any[]>([]);
   const [inputText, setInputText] = useState('');
   const [showStickers, setShowStickers] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -19,53 +21,89 @@ export default function App() {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [installPrompt, setInstallPrompt] = useState<any>(null);
   
-  // 新增：動態網址配置狀態
-  const [isConfigured, setIsConfigured] = useState(!import.meta.env.PROD || !!localStorage.getItem('chat_server_url'));
-  const [serverInput, setServerInput] = useState('');
+
   
   const { notify } = useNotification();
   const { startBlink } = useFaviconBlink();
   const { playNotificationSound } = useSound();
   const scrollRef = useChatScroll<ChatMessage[]>(messages);
   const ws = React.useRef<WebSocket | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isIdle, setIsIdle] = useState(false);
+  const idleTimerRef = React.useRef<number | null>(null);
+
+  const resetIdleTimer = React.useCallback(() => {
+    setIsIdle(false);
+    if (idleTimerRef.current) window.clearTimeout(idleTimerRef.current);
+    idleTimerRef.current = window.setTimeout(() => {
+      setIsIdle(true);
+    }, 60000); // 60秒無動作觸發
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener('mousemove', resetIdleTimer);
+    window.addEventListener('keydown', resetIdleTimer);
+    window.addEventListener('touchstart', resetIdleTimer);
+    resetIdleTimer();
+
+    return () => {
+      window.removeEventListener('mousemove', resetIdleTimer);
+      window.removeEventListener('keydown', resetIdleTimer);
+      window.removeEventListener('touchstart', resetIdleTimer);
+      if (idleTimerRef.current) window.clearTimeout(idleTimerRef.current);
+    }
+  }, [resetIdleTimer]);
+
+  // 全域剪貼簿上傳機制 (Ctrl+V)
+  useEffect(() => {
+    const handlePaste = async (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      
+      for (const item of Array.from(items)) {
+        if (item.type.startsWith('image/')) {
+          e.preventDefault(); // 阻止貼在輸入框內的預設行為
+          const file = item.getAsFile();
+          if (file) {
+            if (file.size > 50 * 1024 * 1024) {
+              alert("剪貼簿檔案大小不可超過 50MB");
+              return;
+            }
+            setIsUploading(true);
+            try {
+              const { url } = await uploadFile(file);
+              const payload = `[IMAGE:${url}]`;
+              if (ws.current?.readyState === WebSocket.OPEN) {
+                ws.current.send(JSON.stringify({ text: payload }));
+              }
+            } catch (error) {
+              alert("剪貼簿圖片上傳失敗");
+            } finally {
+              setIsUploading(false);
+            }
+            break; // 每次貼上只處理第一張圖
+          }
+        }
+      }
+    };
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, []);
 
   const STICKERS = [
-    { id: 'grinning', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f600/512.webp' },
-    { id: 'joy', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f602/512.webp' },
-    { id: 'rofl', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f923/512.webp' },
-    { id: 'smile_hearts', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f970/512.webp' },
-    { id: 'heart_eyes', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f60d/512.webp' },
-    { id: 'star_struck', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f929/512.webp' },
-    { id: 'kiss', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f618/512.webp' },
-    { id: 'zany', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f92a/512.webp' },
-    { id: 'cool', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f60e/512.webp' },
-    { id: 'party', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f973/512.webp' },
-    { id: 'smirk', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f60f/512.webp' },
-    { id: 'unamused', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f612/512.webp' },
-    { id: 'roll_eyes', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f644/512.webp' },
-    { id: 'pleading', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f97a/512.webp' },
-    { id: 'cry', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f62d/512.webp' },
-    { id: 'rage', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f621/512.webp' },
-    { id: 'exploding', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f92f/512.webp' },
-    { id: 'swear', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f92c/512.webp' },
-    { id: 'poop', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f4a9/512.webp' },
-    { id: 'clown', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f921/512.webp' },
-    { id: 'ghost', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f47b/512.webp' },
-    { id: 'alien', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f47d/512.webp' },
-    { id: 'robot', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f916/512.webp' },
-    { id: 'cat', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f63a/512.webp' },
-    { id: 'dog', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f436/512.webp' },
-    { id: 'monkey', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f412/512.webp' },
-    { id: 'unicorn', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f984/512.webp' },
-    { id: 'fire', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f525/512.webp' },
-    { id: '100', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f4af/512.webp' },
-    { id: 'sparkles', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/2728/512.webp' },
-    { id: 'star', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f31f/512.webp' },
-    { id: 'heart', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/2764/512.webp' },
-    { id: 'broken_heart', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f494/512.webp' },
-    { id: 'thumbs_up', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f44d/512.webp' },
-    { id: 'peace', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/270c/512.webp' },
-    { id: 'ok', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f44c/512.webp' }
+    { id: 'grinning', char: '😀' }, { id: 'joy', char: '😂' }, { id: 'rofl', char: '🤣' },
+    { id: 'smile_hearts', char: '🥰' }, { id: 'heart_eyes', char: '😍' }, { id: 'star_struck', char: '🤩' },
+    { id: 'kiss', char: '😘' }, { id: 'zany', char: '🤪' }, { id: 'cool', char: '😎' },
+    { id: 'party', char: '🥳' }, { id: 'smirk', char: '😏' }, { id: 'unamused', char: '😒' },
+    { id: 'roll_eyes', char: '🙄' }, { id: 'pleading', char: '🥺' }, { id: 'cry', char: '😭' },
+    { id: 'rage', char: '😡' }, { id: 'exploding', char: '🤯' }, { id: 'swear', char: '🤬' },
+    { id: 'poop', char: '💩' }, { id: 'clown', char: '🤡' }, { id: 'ghost', char: '👻' },
+    { id: 'alien', char: '👽' }, { id: 'robot', char: '🤖' }, { id: 'cat', char: '😺' },
+    { id: 'dog', char: '🐶' }, { id: 'monkey', char: '🐵' }, { id: 'unicorn', char: '🦄' },
+    { id: 'fire', char: '🔥' }, { id: '100', char: '💯' }, { id: 'sparkles', char: '✨' },
+    { id: 'star', char: '🌟' }, { id: 'heart', char: '❤️' }, { id: 'broken_heart', char: '💔' },
+    { id: 'thumbs_up', char: '👍' }, { id: 'peace', char: '✌️' }, { id: 'ok', char: '👌' }
   ];
 
   useEffect(() => {
@@ -76,44 +114,19 @@ export default function App() {
     };
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
 
-    // 解析網址列是否有 ?server= 參數
-    const params = new URLSearchParams(window.location.search);
-    const serverParam = params.get('server');
-    if (serverParam) {
-      // 若沒有 http 開頭幫他加上 (Ngrok 預設 https)
-      const validUrl = serverParam.startsWith('http') ? serverParam : `https://${serverParam}`;
-      localStorage.setItem('chat_server_url', validUrl);
-      window.history.replaceState({}, document.title, window.location.pathname);
-      setIsConfigured(true);
-    }
+
 
     // 取得自己的用戶名稱
     fetchMe().then(name => {
       if (name) setCurrentUser(name);
     });
 
-    if (!isConfigured || isAccessDenied) return;
+    if (isAccessDenied) return;
 
     // 建立 WebSocket 連線
-    let wsUrl = '';
-    if (!import.meta.env.PROD) {
-      // 本地開發：直接使用相對路徑，善用 Vite Proxy
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      wsUrl = `${protocol}//${window.location.host}${window.location.pathname.replace(/\/$/, '')}/api/ws`;
-    } else {
-      // 正式環境 (GitHub Pages)：解析使用者填寫的伺服器網址
-      const savedUrl = localStorage.getItem('chat_server_url');
-      if (!savedUrl) return;
-      try {
-        const parsedUrl = new URL(savedUrl);
-        const protocol = parsedUrl.protocol === 'https:' ? 'wss:' : 'ws:';
-        wsUrl = `${protocol}//${parsedUrl.host}${parsedUrl.pathname.replace(/\/$/, '')}/api/ws`;
-      } catch (e) {
-        console.error("Invalid server URL", savedUrl);
-        setIsConfigured(false);
-        return;
-      }
-    }
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/api/ws`;
+
 
     const socket = new WebSocket(wsUrl);
 
@@ -187,7 +200,7 @@ export default function App() {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       socket.close();
     };
-  }, [isConfigured, isAccessDenied, currentUser, notify]);
+  }, [isAccessDenied, currentUser, notify]);
 
   const handleSend = async (e?: React.FormEvent, overridingText?: string) => {
     e?.preventDefault();
@@ -211,10 +224,49 @@ export default function App() {
 
   const renderMessageText = (text: string) => {
     if (text.startsWith('[STICKER:') && text.endsWith(']')) {
-      const url = text.substring(9, text.length - 1);
-      return <img src={url} alt="sticker" className="w-24 h-24 object-contain animate-bounce" />;
+      const char = text.substring(9, text.length - 1);
+      return <span className="text-6xl inline-block animate-bounce drop-shadow-lg">{char}</span>;
+    }
+    if (text.startsWith('[IMAGE:') && text.endsWith(']')) {
+      const url = text.substring(7, text.length - 1);
+      return <img src={url} alt="uploaded" className="max-w-[200px] md:max-w-xs rounded-xl shadow-md border border-white/20 mt-2 hover:scale-105 transition-transform" />;
+    }
+    if (text.startsWith('[FILE:') && text.endsWith(']')) {
+      const parts = text.substring(6, text.length - 1).split('|');
+      const url = parts[0];
+      const filename = parts.length > 1 ? parts[1] : 'Download File';
+      return (
+        <a href={url} download={filename} target="_blank" rel="noreferrer" className="flex items-center gap-3 bg-white/20 hover:bg-white/30 p-3 rounded-xl transition-colors mt-2 no-underline text-current group shadow-sm">
+          <div className="w-10 h-10 rounded-lg bg-white/40 flex items-center justify-center text-xl group-hover:-translate-y-1 transition-transform drop-shadow-sm">📥</div>
+          <div className="flex flex-col">
+            <span className="font-bold text-sm truncate max-w-[150px] md:max-w-[200px]">{filename}</span>
+            <span className="text-[10px] opacity-70">點擊下載</span>
+          </div>
+        </a>
+      );
     }
     return text;
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 50 * 1024 * 1024) {
+      alert("檔案大小不可超過 50MB");
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      const { url, filename, isImage } = await uploadFile(file);
+      const payload = isImage ? `[IMAGE:${url}]` : `[FILE:${url}|${filename}]`;
+      handleSend(undefined, payload);
+    } catch (error) {
+      alert("檔案上傳失敗");
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
   };
 
 
@@ -230,52 +282,7 @@ export default function App() {
     }
   };
 
-  const handleSaveConfig = (e: React.FormEvent) => {
-    e.preventDefault();
-    let url = serverInput.trim();
-    if (!url.startsWith('http')) {
-      url = 'https://' + url;
-    }
-    try {
-      new URL(url); // 測試是否為合法網址
-      localStorage.setItem('chat_server_url', url);
-      setIsConfigured(true);
-    } catch {
-      alert("請輸入有效的網址 (例如 https://xxxxx.ngrok.app)");
-    }
-  };
 
-  if (!isConfigured) {
-    return (
-      <div className="flex h-screen w-full items-center justify-center bg-base-300 p-4">
-        <div className="card w-full max-w-md glass-panel shadow-2xl animate-scale-up border border-white/20">
-          <div className="card-body items-center text-center p-8">
-            <div className="w-16 h-16 bg-gradient-to-br from-primary to-secondary rounded-2xl flex items-center justify-center mb-4 shadow-lg border border-white/30 rotate-3 cursor-pointer hover:rotate-6 transition-transform">
-               <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-               </svg>
-            </div>
-            <h2 className="card-title text-2xl mb-2 font-black tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary">連線大門</h2>
-            <p className="text-sm opacity-80 mb-6 leading-relaxed">請輸入您的伺服器位址<br/>(例如 Ngrok 網址)，以建立安全加密連線。</p>
-            
-            <form onSubmit={handleSaveConfig} className="w-full flex flex-col gap-4">
-               <input 
-                 type="text" 
-                 required 
-                 value={serverInput}
-                 onChange={e => setServerInput(e.target.value)}
-                 className="input w-full bg-white/60 border-none focus:bg-white focus:ring-2 focus:ring-primary/50 shadow-inner rounded-xl font-mono text-center tracking-wider text-primary"
-                 placeholder="https://xxxxx.ngrok.app"
-               />
-               <button type="submit" className="btn btn-primary w-full rounded-xl shadow-lg border-none hover:scale-[1.02] active:scale-[0.98] transition-transform font-bold tracking-widest mt-2 h-12">
-                 啟動連線 🚀
-               </button>
-            </form>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   if (isAccessDenied) {
     return (
@@ -292,10 +299,19 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-screen w-full items-center justify-center p-2 md:p-6 gap-6">
-      
+    <>
+      {isIdle && <Screensaver />}
+      <div className="flex h-screen w-full items-center justify-center p-2 md:p-6 gap-6 relative overflow-hidden" onClick={resetIdleTimer}>
+        
+        {/* Flashy Animated Background Elements */}
+      <div className="fixed inset-0 pointer-events-none z-0">
+        <div className="floating-shape absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-primary/40 rounded-full mix-blend-multiply blur-[80px]" style={{ animationDelay: '0s' }}></div>
+        <div className="floating-shape absolute top-[20%] right-[-10%] w-[600px] h-[600px] bg-secondary/30 rounded-full mix-blend-multiply blur-[100px]" style={{ animationDelay: '4s' }}></div>
+        <div className="floating-shape absolute bottom-[-20%] left-[20%] w-[800px] h-[800px] bg-accent/40 rounded-full mix-blend-multiply blur-[120px]" style={{ animationDelay: '8s' }}></div>
+      </div>
+
       {/* Online Users Side Panel (Left) */}
-      <div className="hidden md:flex card w-72 h-[88vh] glass-panel shadow-2xl flex-col overflow-hidden animate-scale-up rounded-[2.5rem]">
+      <div className="hidden md:flex flex-col relative z-10 card w-72 h-[88vh] glass-panel shadow-2xl overflow-hidden animate-scale-up rounded-[2.5rem]">
         <div className="glass-header text-primary p-4 font-bold text-lg text-center flex items-center justify-center gap-2">
           <div className="w-2 h-2 bg-success rounded-full animate-pulse"></div>
           目前在線 ({onlineUsers.length})
@@ -307,45 +323,73 @@ export default function App() {
               尋找旅伴中...
             </div>
           ) : (
-            onlineUsers.map(user => (
-              <div key={user} className="flex items-center gap-4 p-3 hover:bg-white/40 rounded-2xl transition-all duration-300 border border-transparent hover:border-white/50 group cursor-pointer shadow-sm hover:shadow-md">
-                <div className="relative">
-                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white font-bold shadow-lg group-hover:rotate-6 transition-transform">
-                    {user.charAt(0)}
+            onlineUsers.map(user => {
+              const isMe = user.name === currentUser;
+              return (
+                <div key={user.name} className="flex items-center gap-4 p-3 hover:bg-white/40 rounded-2xl transition-all duration-300 border border-transparent hover:border-white/50 group cursor-pointer shadow-sm hover:shadow-md">
+                  <div className="relative">
+                    <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white font-bold shadow-lg group-hover:rotate-6 transition-transform">
+                      {user.name.charAt(0)}
+                    </div>
+                    <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-success rounded-full border-2 border-white shadow-sm"></div>
                   </div>
-                  <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-success rounded-full border-2 border-white shadow-sm"></div>
+                  <div className="flex flex-col flex-1">
+                    <span className="font-bold text-gray-800 text-sm">{user.name}</span>
+                    {isMe ? (
+                      <input 
+                        type="text" 
+                        placeholder="打點什麼..." 
+                        className="input input-xs input-ghost text-[10px] text-success font-medium uppercase tracking-wider h-5 px-1 mt-0.5 focus:bg-white focus:outline-none focus:border-success/30 rounded w-full" 
+                        defaultValue={user.status || ''}
+                        onBlur={(e) => {
+                          if (ws.current?.readyState === WebSocket.OPEN) {
+                            ws.current.send(JSON.stringify({ type: 'STATUS', status: e.target.value.trim() }));
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') e.currentTarget.blur();
+                        }}
+                      />
+                    ) : (
+                      <span className="text-[10px] text-success font-medium uppercase tracking-wider pl-1">{user.status || 'Active'}</span>
+                    )}
+                  </div>
                 </div>
-                <div className="flex flex-col">
-                  <span className="font-bold text-gray-800 text-sm">{user}</span>
-                  <span className="text-[10px] text-success font-medium uppercase tracking-wider">Active</span>
-                </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
         
         {/* PWA Install Button or Manual Hint */}
-        {installPrompt ? (
-          <div className="p-4 border-t border-white/20">
+        <div className="p-4 border-t border-white/20 flex flex-col gap-2">
+          <button 
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsIdle(true);
+            }}
+            className="btn btn-secondary btn-outline w-full rounded-xl text-white shadow-sm hover:shadow-md bg-white/20 border-white/40 font-bold"
+          >
+            💤 進入放空模式
+          </button>
+          
+          {installPrompt ? (
             <button 
               onClick={handleInstallClick}
-              className="btn btn-primary w-full rounded-xl shadow-lg border-none animate-bounce"
+              className="btn btn-primary w-full rounded-xl shadow-lg border-none animate-bounce mt-2"
             >
               📥 安裝此 APP
             </button>
-          </div>
-        ) : (
-          <div className="p-4 border-t border-white/10 opacity-40 hover:opacity-100 transition-opacity">
-            <p className="text-[10px] text-center italic">
+          ) : (
+            <p className="text-[10px] text-center italic opacity-40 mt-1">
               提示：若要常駐提醒，請點擊瀏覽器選單 <br/> 
               <strong>「應用程式 → 安裝此站台」</strong>
             </p>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Main Chat Window */}
-      <div className="card w-full max-w-3xl h-[88vh] glass-panel shadow-2xl flex flex-col overflow-hidden animate-scale-up rounded-[2.5rem] border border-white/40">
+      <div className="relative z-10 card w-full max-w-3xl h-[88vh] glass-panel shadow-2xl flex flex-col overflow-hidden animate-scale-up rounded-[2.5rem] border border-white/40">
         {/* Header */}
         <div className="glass-header p-5 shadow-sm z-10 flex flex-col gap-2">
           <div className="flex justify-between items-center">
@@ -391,8 +435,8 @@ export default function App() {
             return (
               <div key={msg.id} className={`chat ${isMe ? 'chat-end' : 'chat-start'} animate-message-in`}>
                 <div className="chat-image avatar">
-                  <div className="w-8 h-8 rounded-full shadow-md border border-white">
-                    <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${msg.sender}`} alt="avatar" />
+                  <div className="w-8 h-8 rounded-full shadow-md border border-white bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white font-bold">
+                    {msg.sender.charAt(0)}
                   </div>
                 </div>
                 <div className="chat-header opacity-50 text-[10px] font-bold uppercase mb-1 mx-2">
@@ -421,26 +465,42 @@ export default function App() {
                   <button
                     key={sticker.id}
                     type="button"
-                    onClick={() => handleSend(undefined, `[STICKER:${sticker.url}]`)}
+                    onClick={() => handleSend(undefined, `[STICKER:${sticker.char}]`)}
                     className="hover:scale-125 hover:-translate-y-1 hover:shadow-xl hover:bg-white/40 rounded-2xl p-2 transition-all duration-300 focus:outline-none flex items-center justify-center bg-transparent"
                   >
-                    <img loading="lazy" src={sticker.url} alt={sticker.id} className="w-12 h-12 drop-shadow-md" />
+                    <span className="text-3xl drop-shadow-md">{sticker.char}</span>
                   </button>
                 ))}
               </div>
             </div>
           )}
 
-          <form onSubmit={handleSend} className="flex gap-3 items-center">
+          <form onSubmit={handleSend} className="flex gap-2 md:gap-3 items-center">
             <button
               type="button"
               className="btn btn-circle bg-white/50 border-none hover:bg-white text-primary shadow-sm"
               onClick={() => setShowStickers(!showStickers)}
+              title="貼圖"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </button>
+
+            <button
+              type="button"
+              className="btn btn-circle bg-white/50 border-none hover:bg-white text-primary shadow-sm"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+              title="上傳圖片或檔案 (上限 50MB)"
+            >
+              {isUploading ? <span className="loading loading-spinner loading-sm"></span> : (
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                </svg>
+              )}
+            </button>
+            <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
             <input 
               type="text" 
               placeholder={STRINGS.INPUT_PLACEHOLDER}
@@ -460,9 +520,14 @@ export default function App() {
         </div>
       </div>
 
-      {/* Trace Log Side Panel */}
+      {/* Snake Game Side Panel (Right) */}
+      <div className="hidden xl:flex relative z-10">
+        <SnakeGame />
+      </div>
+
+      {/* Trace Log Side Panel (Only if Admin, will push UI or stack) */}
       {isAdmin && (
-        <div className="hidden lg:flex card w-80 h-[88vh] glass-panel shadow-2xl flex-col overflow-hidden animate-scale-up rounded-[2.5rem]">
+        <div className="hidden 2xl:flex relative z-10 card w-80 h-[88vh] glass-panel shadow-2xl flex-col overflow-hidden animate-scale-up rounded-[2.5rem]">
           <div className="glass-header text-neutral p-4 font-bold text-lg text-center">
             🛡️ 監控軌跡 (Monitor)
           </div>
@@ -485,5 +550,6 @@ export default function App() {
         </div>
       )}
     </div>
+    </>
   );
 }
