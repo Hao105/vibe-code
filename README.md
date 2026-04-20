@@ -31,76 +31,64 @@ graph LR
 
 ---
 
+## 🛠️ 三階段自動化編譯流程 (Detailed Build Stages)
+
+本專案採用 Docker Multi-stage Build 技術，確保編譯環境與產物完全隔離，以下為各階段詳細說明：
+
+### 第一階段：前端靜態構建 (Frontend Build)
+*   **使用 Image**: `node:20-alpine` (輕量化 Node.js 環境)
+*   **任務**: 
+    1.  載入 React 18 原始碼。
+    2.  執行 `npm install` 安裝依賴。
+    3.  執行 `npm run build` (Vite)，將 JSX/TSX 優化、壓縮並打包成純靜態 HTML/JS/CSS。
+*   **產物指標**: 產出位於 `/dist` 目錄的優化後資源。
+
+### 第二階段：後端交叉編譯 (Backend Cross-Compile)
+*   **使用 Image**: `golang:1.21-alpine` (Go 語言官方編譯環境)
+*   **任務**:
+    1.  載入 Go 原始碼，並執行 `go mod download` 預熱依賴。
+    2.  設定環境變數 `GOOS=windows` 與 `GOARCH=amd64`。
+    3.  執行 `go build`：在 Linux 容器內，將 Go 代碼編譯成 **Windows 原生可執行二進位檔**。
+*   **產物指標**: 產出具備高性能、單一檔案特性的 `server.exe`。
+
+### 第三階段：快遞母艦封裝 (Payload Packaging)
+*   **使用 Image**: `alpine:latest` (極致輕量的 Linux 散佈版)
+*   **任務**:
+    1.  **物資收集**：從前兩個階段的容器中，分別把 `dist/` (前端) 與 `server.exe` (後端) 提取出來，存入容器內的 `/payload` 目錄。
+    2.  **腳本注入**：寫入自動卸載 (Unload) 指令。
+*   **最終打包**: 將此 Image 導出為 `vibe-code-windows-release-v5.tar`。
+
+---
+
+## 🚚 快遞卸載邏輯 (Deployment Process)
+本專案的 Docker Image 並非用來「運行程式」，而是作為一個「會自動把檔案吐出來」的載體：
+
+1.  **使用者執行**: `docker run --rm -v D:/MyPath:/host vibe-code-windows-release-v5`
+2.  **Image 行為**: 啟動後立刻執行 `cp -r /payload/* /host/`。
+3.  **結果**: 所有的 Windows 產物會出現在主機的 `D:/MyPath` 資料夾，隨後容器自動自我銷毀，不佔用系統資源。
+
+---
+
 ## 📘 應用程式系統架構設計文件 (SA Document)
 
-### 1. 技術棧與規範 (Tech Stack)
-*   **前端 (Frontend)**: React 18, Vite, Tailwind CSS, DaisyUI (Glassmorphism 風格).
-*   **後端 (Backend)**: Go (Golang) 1.21+ (原生靜態編譯).
-*   **通訊 (Communication)**: WebSocket (ws/wss) 實時雙向傳輸.
-*   **安全 (Security)**: TLS 1.2+ 強制、IP 白名單動態熱載入、MIME 類型硬註冊、PWA 持久化快取。
+### 1. 技術棧與安全規範
+*   **前端 (Frontend)**: React 18 & PWA Offline Persistence.
+*   **後端 (Backend)**: Single-binary Native Go (Windowed Mode).
+*   **傳輸安全**: 強制 TLS 1.2+、IP 白名單動態偵測。
 
-### 2. 核心模組設計 (Module Design)
-
-#### A. 統一進入點 (Single Binary Gateway)
-不同於傳統分散式架構，`server.exe` 同時扮演 **HTTP File Server** 與 **API/WS Server**。
-*   **靜態資源管理**: 接管 `dist/` 目錄，自動處理 React Router 的跳轉邏輯。
-*   **多媒體服務**: 接管 `uploads/` 目錄，提供 50MB 等級的檔案與圖片存取。
-
-#### B. 即時通訊引擎 (WS Hub)
-*   **狀態廣播系統**: 基於異步 Channel 分發，當用戶發送狀態更新時，後端會將全體名單（含狀態）重新推送到所有連線端。
-*   **持久化訊息鏈**: 最近 20 筆聊天紀錄暫存於記憶體，新進入者可秒速獲取上下文。
-
-#### C. 五層安全防護體系 (5-Layer Security)
-1.  **Transport 層**: 強制 TLS 1.2 握手，杜絕 SSLStrip 等降級攻擊。
-2.  **Network 層**: 基於 `X-Real-IP` 或 `RemoteAddr` 的白名單過濾，非許可 IP 無法載入任何資源。
-3.  **Application 層**: MIME Sniffing 防止惡意腳本執行。
-4.  **Privacy 層**: 內建閒置 60 秒「啦啦隊螢幕保護程式」，防止實體監視。
-5.  **Offline 層**: 0 CDN 依賴，確保連內部網路物理隔離時仍能 100% 正常運作。
-
-### 3. 資料流向圖 (Data Flow)
-
-#### 訊息傳遞路徑:
-1.  **Input**: 用戶在 PWA 介面輸入文字、上傳圖片或 `Ctrl+V` 貼上圖檔。
-2.  **Upload (if file)**: 透過 `POST /api/upload` 存入本地 `./uploads/`，檔名採 `timestamp-filename` 命名防撞。
-3.  **WS Submit**: 透過 WebSocket 傳送 JSON 格式封包（含 `TEXT` 或 `STATUS`）。
-4.  **Broadcast**: 指令被推入 Go 的廣播 Queue。
-5.  **Output**: 所有活躍中的 WebSocket 客戶端接收到資訊並以動態磁貼 (Toast) 或氣泡通知呈現。
+### 2. 五層安全防護體系 (5-Layer Security)
+1.  **Transport 層**: 強制 TLS 握手。
+2.  **Network 層**: IP 白名單過濾（熱更新）。
+3.  **Application 層**: 原生 MIME 類型註冊，防止 XSS/ORB。
+4.  **Privacy 層**: 啦啦隊 Screensaver 防實體監視。
+5.  **Offline 層**: 物理斷網環境 100% 獨立運行。
 
 ---
 
-## 🌟 亮點功能 (Feature Highlights)
-
-*   **PWA 獨立視窗 (Standalone Mode)**：支援安裝至工作列，擁有專屬圖示，不再與瀏覽器分頁混淆。
-*   **個人狀態同步**：使用者可隨時編輯狀態（如「開會中」），WebSocket 全域即時同步。
-*   **李多慧/李雅英 專屬 Screensaver**：一鍵開啟韓籍啦啦隊應援輪播，緩解工作壓力。
-*   **SNAKE OS**：整合於極致美學面板中的隱藏版貪吃蛇遊戲。
-
----
-
-## 🚀 部署與啟動 (Deployment Guide)
-
-### 1. 取得執行檔
-👉 **`vibe-code-windows-release-v5.tar`** (內含 V5 專業版所有組件)
-
-### 2. 卸載並啟動
-```powershell
-docker load -i vibe-code-windows-release-v5.tar
-docker run --rm -v D:/YourFolder:/host vibe-code-windows-release-v5
-# 卸載後進入該資料夾
-.\server.exe
-```
-*   **存取路徑**: `https://[您的IP]:1501/vibe-code/`
-*   **管理員權限**: 當 IP 被對應到 `whitelist.json` 中的 `Admin` 時，介面會自動啟動「實時軌跡監控」面板。
-
----
-
-## 📦 目錄權責清單
-- `server.exe`: 核心大腦、靜態服務與安全閘道。
-- `whitelist.json`: 用戶身分與 IP 對應表（支援熱更新）。
-- `dist/`: 經過 Vite 編譯、內建持久化 Service Worker 的 UI。
-- `uploads/`: 使用者傳出的檔案存儲區。
-
----
-
-## 🛡️ 維護指南
-如果您看到 `⚠️ 拒絕連線` 的警告，請直接編輯目錄下的 `whitelist.json` 並存檔，系統將在 **3 秒內自動熱載入**。
+## 🚀 最終部署清單 (V5 Contents)
+解壓完成後，目錄必須包含：
+*   📦 **`server.exe`**: 雙擊即可執行的主程式。
+*   📁 **`dist/`**: 包含 UI 介面的網頁資料夾。
+*   📄 **`whitelist.json`**: IP 管理清單。
+*   🔑 **`cert.pem / key.pem`**: SSL 安全憑證。
+*   🖼️ **`uploads/`**: 檔案存儲目錄。
