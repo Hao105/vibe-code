@@ -9,7 +9,7 @@
 ## 🏗️ 第一步：把映像檔帶上車
 
 專案根目錄中現在已經有這個檔案：
-👉 **`vibe-code-windows-release.tar`**
+👉 **`vibe-code-windows-release-v5.tar`**
 
 請把這個檔案複製到隨身碟上，帶往您的離線環境。
 
@@ -22,7 +22,7 @@
 1. **載入映像檔**：
    打開終端機或 PowerShell，進入該資料夾，並輸入：
    ```powershell
-   docker load -i vibe-code-windows-release.tar
+   docker load -i vibe-code-windows-release-v5.tar
    ```
 
 2. **啟動自動卸載程序 (將產物倒出來)**：
@@ -49,6 +49,6 @@
 這支強化過的原生 Go 程式，現在會自動包辦所有事情：**不僅能處理聊天通訊，還兼顧提供前端網頁檔案 (`dist/`)。**
 
 您的朋友只要在區域網路內開啟瀏覽器，輸入：
-`https://（這台電腦的實體IP）:8080/vibe-code/`
+`https://（這台電腦的實體IP）:1501/vibe-code/`
 
 就能順利看見精美的畫面，而且在不需要經過任何 Nginx 或 Docker NAT 的干擾下，您的白名單將能精確抓到並識別他們原汁原味的每一台**真實 IP**！

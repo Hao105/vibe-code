@@ -336,9 +336,9 @@ func main() {
 		}
 	})
 
-	fmt.Println("🚀 Antigravity Chat Server is running on https://localhost:8080")
+	fmt.Println("🚀 Antigravity Chat Server is running on https://localhost:1501")
 	server := &http.Server{
-		Addr: ":8080",
+		Addr: ":1501",
 		TLSConfig: &tls.Config{
 			MinVersion: tls.VersionTLS12,
 		},
